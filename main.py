@@ -3,14 +3,16 @@ import numpy as np
 import pandas as pd
 
 import time
+import shutil
 
 import requests
 import json
 import os
-import time
 
 from joblib import load
 import xgboost as xgb
+
+import tensorflow as tf
 
 app = Flask(__name__)
 
@@ -21,12 +23,22 @@ def get_prediction():
 
     req = requests.get('http://puma.swstats.info/' + data['key'])
 
-    model_name = 'model' + str(time.time()) + '.bin'
-    open(model_name, 'wb').write(req.content)
-    model = load(model_name)
-    os.remove(model_name)
+    if '.zip' in data['key']:
+        model_name = 'model' + str(time.time()) + '.zip'
+        open(model_name, 'wb').write(req.content)
+        shutil.unpack_archive(model_name, data['key'][7:-4])
+        model = tf.keras.models.load_model(data['key'][7:-4])
+        os.remove(model_name)
+        shutil.rmtree(data['key'][7:-4], ignore_errors=True)
+    else:
+        model_name = 'model' + str(time.time()) + '.bin'
+        open(model_name, 'wb').write(req.content)
+        model = load(model_name)
+        os.remove(model_name)
 
     try:
+        if '.zip' in data['key']:
+            raise AttributeError # force predict function instead of predict_proba since it will be deprecated in future Tensorflow 
         prediction = [float(number) for number in model.predict_proba(df)[0]]
         probability = True
     except AttributeError:
